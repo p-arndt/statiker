@@ -51,8 +51,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
             ${{ runner.os }}-cargo-
 
       - name: Install build dependencies
@@ -143,7 +144,9 @@ jobs:
           context: .
           push: true
           build-args: VERSION=${{ steps.get_tag.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          # Only build for linux/amd64 (most common platform) to speed up builds
+          # To add more platforms (arm/v7, arm64), change to: platforms: linux/amd64,linux/arm/v7,linux/arm64
+          platforms: linux/amd64
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:${{ steps.get_tag.outputs.VERSION }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:latest
