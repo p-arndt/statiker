@@ -418,12 +418,8 @@ Automatic compression of text-based files (HTML, CSS, JS, JSON, etc.) using gzip
 
 ## 📝 License
 
-[Add your license information here]
+MIT
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📧 Contact
-
-[Add your contact information here]
