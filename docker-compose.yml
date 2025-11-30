@@ -4,6 +4,5 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./statiker/sample:/app/public
-    environment:
-      - ENABLE_UPLOAD=true
+      - ./statiker.yaml:/app/statiker.yaml
+      - ./static:/app/static

@@ -1,12 +1,16 @@
-name: Build and release statiker
+name: Build and Publish Release
+
+permissions:
+  contents: write
+  packages: write
+
 on:
   push:
-    branches:
-      - main
+    tags: ["*"]
 
 jobs:
-  build-and-upload:
-    name: Build and upload
+  build:
+    name: Build binaries
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -16,88 +20,215 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
 
-          # - build: macos | # NOPE I DONT DO THIS. YOU'RE RICH ENOUGH TO DO IT YOURSELF.
-          #   os: macos-latest
-          #   target: x86_64-apple-darwin
-
           - build: windows-gnu
             os: ubuntu-latest
             target: x86_64-pc-windows-gnu
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
-          submodules: 'recursive' # Add this line to checkout submodules
+          fetch-depth: 0
+          fetch-tags: true
 
-      # Get version from cargo.toml
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" >> $GITHUB_ENV
+      - name: Get Tag
+        id: get_tag
+        run: |
+          cur=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=0 --max-count=1))
+          echo "VERSION=$cur" >> $GITHUB_OUTPUT
+          echo "VERSION=$cur" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Make Rust compile to our target (defined in the matrix)
           targets: ${{ matrix.target }}
+          override: true
 
-      - name: Install mingw-w64
-        if: matrix.build == 'windows-gnu'
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y mingw-w64 zip
+          sudo apt-get install -y zip
+          if [ "${{ matrix.build}}" = "windows-gnu" ]; then
+            sudo apt-get install -y mingw-w64
+          fi
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --verbose --release --target ${{ matrix.target }} 
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build archive
         shell: bash
         run: |
           binary_name="statiker"
-
-          dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
+          version="${{ steps.get_tag.outputs.VERSION }}"
+          dirname="$binary_name-$version-${{ matrix.target }}"
           mkdir "$dirname"
+          
           if [ "${{ matrix.build}}" = "windows-gnu" ]; then
             mv "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname/$binary_name.exe"
-            echo "ASSET=$dirname/$binary_name.exe" >> $GITHUB_ENV
+            asset_path="$dirname/$binary_name.exe"
+            zip_name="$binary_name-$version-windows-x86_64.zip"
           else
             mv "target/${{ matrix.target }}/release/$binary_name" "$dirname/$binary_name"
-            echo "ASSET=$dirname/$binary_name" >> $GITHUB_ENV
+            asset_path="$dirname/$binary_name"
+            zip_name="$binary_name-$version-linux-x86_64.zip"
           fi
+          
+          # Create zip archive
+          cd "$dirname"
+          zip -r "../$zip_name" .
+          cd ..
+          
+          echo "ASSET_PATH=$zip_name" >> $GITHUB_ENV
+          echo "Created archive: $zip_name"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET_PATH }}
+
+  docker:
+    name: Build and push Docker images
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get Tag
+        id: get_tag
+        run: |
+          cur=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=0 --max-count=1))
+          echo "VERSION=$cur" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        if: matrix.build == 'linux'
         uses: docker/setup-buildx-action@v3
 
-
-      - name: Login Docker Hub
-        if: matrix.build == 'linux'
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push docker image
-        if: matrix.build == 'linux'
-        uses: docker/build-push-action@v5
-        id: build-and-push
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker images (Docker Hub + GHCR)
+        uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
           push: true
-          tags: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:${{ env.VERSION }},docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:latest
+          build-args: VERSION=${{ steps.get_tag.outputs.VERSION }}
+          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          tags: |
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:${{ steps.get_tag.outputs.VERSION }}
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:latest
+            ghcr.io/${{ github.repository_owner }}/statiker:${{ steps.get_tag.outputs.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/statiker:latest
+          cache-from: |
+            type=registry,ref=docker.io/${{ secrets.DOCKERHUB_USERNAME }}/statiker:latest
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/statiker:latest
+          cache-to: type=inline
 
-          
-      - name: Tag commit
-        run: |
-          git tag ${{ env.VERSION }}
-          git push origin ${{ env.VERSION }}
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build, docker]
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
         with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get Tag
+        id: get_tag
+        run: |
+          cur=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=0 --max-count=1))
+          echo "VERSION=$cur" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*.zip'
+          merge-multiple: true
+
+      - name: Install git-chglog
+        run: |
+          curl -sSL https://github.com/git-chglog/git-chglog/releases/download/v0.15.4/git-chglog_0.15.4_linux_amd64.tar.gz \
+            | tar -xz
+          sudo mv git-chglog /usr/local/bin/
+
+      - name: Generate changelog
+        run: |
+          CUR=${{ steps.get_tag.outputs.VERSION }}
+          
+          echo "## 🚀 Release $CUR" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          # Try to generate changelog, fallback to simple message if git-chglog fails
+          if git-chglog $CUR >> RELEASE_NOTES.md 2>/dev/null; then
+            echo "✅ Changelog generated"
+          else
+            echo "⚠️  Could not generate changelog, using fallback"
+            echo "See git log for changes." >> RELEASE_NOTES.md
+          fi
+          
+          echo "🔖 Generated notes:"
+          cat RELEASE_NOTES.md
+
+      - name: Prepare release assets
+        run: |
+          # Artifacts are already zipped, just verify they exist
+          echo "📦 Release assets:"
+          find . -name "*.zip" -type f | while read file; do
+            if [ -f "$file" ]; then
+              echo "  ✅ $(basename "$file")"
+            fi
+          done
+          
+          # Verify we have both Linux and Windows builds
+          linux_zip=$(find . -name "*linux*.zip" -type f | head -1)
+          windows_zip=$(find . -name "*windows*.zip" -type f | head -1)
+          
+          if [ -z "$linux_zip" ]; then
+            echo "⚠️  Warning: Linux build not found"
+          fi
+          
+          if [ -z "$windows_zip" ]; then
+            echo "⚠️  Warning: Windows build not found"
+          fi
+          
+          if [ -n "$linux_zip" ] && [ -n "$windows_zip" ]; then
+            echo "✅ Both Linux and Windows builds found"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.VERSION }}
+          body_path: RELEASE_NOTES.md
           files: |
-            ${{ env.ASSET }}
-          tag_name: ${{ env.VERSION }}
+            **/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

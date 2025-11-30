@@ -1,6 +1,6 @@
 [package]
 name = "statiker"
-version = "0.2.4"
+version = "1.0.0"
 edition = "2021"
 description = "Serves static files from a directory"
 authors = ["Patrick Arndt <patrick.arndt.99@web.de>"]
@@ -9,8 +9,43 @@ authors = ["Patrick Arndt <patrick.arndt.99@web.de>"]
 name = "statiker"      # Name of the binary
 path = "./src/main.rs" # Path to the source file
 
-
 [dependencies]
-async-std = { version = "1.12.0", features = ["attributes"] }
-clap = { version = "4.5.1", features = ["cargo"] }
-surfer = "0.3.2" 
+anyhow = "1"
+clap = { version = "4.5", features = ["derive", "env"] }
+axum = { version = "0.7", features = ["macros"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tokio = { version = "1.40", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.5", features = [
+  "cors",
+  "trace",
+  "compression-br",
+  "compression-gzip",
+  "fs",
+  "set-header",
+  "util"
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+humantime-serde = "1.1"
+
+bytes = "1"
+futures-util = "0.3"
+
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1.4", features = ["http1"] }
+hyper-util = { version = "0.1", features = ["client", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "0.27", features = ["webpki-roots"] }
+
+
+governor = "0.6"
+dashmap = "6"
+nonzero_ext = "0.3"
+
+once_cell = "1.19"
+mime_guess = "2"
+html-escape = "0.2"
