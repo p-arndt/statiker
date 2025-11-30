@@ -61,10 +61,15 @@ jobs:
           sudo apt-get install -y zip
           if [ "${{ matrix.build}}" = "windows-gnu" ]; then
             sudo apt-get install -y mingw-w64
+          elif [ "${{ matrix.build}}" = "linux" ]; then
+            sudo apt-get install -y musl-tools build-essential
           fi
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
 
       - name: Build archive
         shell: bash
