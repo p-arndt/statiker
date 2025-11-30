@@ -457,20 +457,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
-]
-
-[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -666,7 +652,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68a7f542ee6b35af73b06abc0dad1c1bae89964e4e253bc4b587b91c9637867b"
 dependencies = [
  "cfg-if",
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
  "futures-timer",
  "no-std-compat",
@@ -1528,30 +1514,26 @@ dependencies = [
 
 [[package]]
 name = "statiker"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "axum",
  "axum-server",
  "bytes",
  "clap",
- "dashmap 6.1.0",
  "futures-util",
  "governor",
  "html-escape",
  "http",
  "http-body-util",
  "humantime-serde",
- "hyper",
  "hyper-rustls",
  "hyper-util",
  "mime_guess",
- "nonzero_ext",
  "once_cell",
  "serde",
  "serde_yaml",
  "tokio",
- "tower 0.5.2",
  "tower-http",
  "tracing",
  "tracing-subscriber",
