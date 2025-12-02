@@ -8,7 +8,7 @@
   <strong>A simple, efficient static file hosting server written in Rust.</strong>
 </p>
 
-Statiker is a fast and efficient static file server with proxy support, built with Rust. It features sensible defaults (like Caddy) and powerful configuration options for advanced use cases.
+Statiker is a fast and efficient static file server with proxy support, built with Rust. It features sensible defaults and powerful configuration options for advanced use cases.
 
 ## 🚀 Features
 
