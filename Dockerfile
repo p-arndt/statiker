@@ -1,10 +1,11 @@
 FROM rust:latest AS builder
 WORKDIR /app
 RUN rustup target add x86_64-unknown-linux-musl
+RUN apt-get update && apt-get install -y musl-tools && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-unknown-linux-musl
 
 FROM scratch AS final
 WORKDIR /app
